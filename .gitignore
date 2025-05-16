@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# my keys text file
+keys.txt
+my_key.txt
+my_key_private.txt
+
+# temp in temp folder
+temp/
+
+# data in the data folder
+data/
+
+

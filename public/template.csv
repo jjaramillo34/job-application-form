@@ -1,0 +1,3 @@
+firstName,lastName,address,city,state,zipCode,phone,email,ssn,dateOfBirth,program,site,lcgmsCode,geographicDistrict,bronx,brooklyn,queens,statenIsland,manhattan,morning,afternoon,evening,weekend,fingerprintQuestionnaire,documentsVerified,attendanceVerified
+John,Doe,123 Main St,New York,NY,10001,2125551234,john.doe@example.com,123456789,1990-01-01,Alternative High School,Main Campus,123456,District 79,true,false,true,false,true,true,false,true,false,true,true,true
+Jane,Smith,456 Park Ave,New York,NY,10002,2125555678,jane.smith@example.com,987654321,1992-05-15,Evening Program,North Campus,789012,District 79,false,true,false,true,false,false,true,true,true,true,true,true 

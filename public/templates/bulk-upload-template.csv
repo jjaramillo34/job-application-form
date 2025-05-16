@@ -1,0 +1,3 @@
+firstName,lastName,address,city,state,zipCode,phone,email,counselor_email,ssn,dateOfBirth,program,site,lcgmsCode,geographicDistrict,bronx,brooklyn,queens,statenIsland,manhattan,morning,afternoon,evening,weekend,fingerprintQuestionnaire,documentsVerified,attendanceVerified
+John,Doe,123 Main St,New York,NY,10001,2125551234,john.doe@example.com,counselor@school.edu,123-45-6789,2000-01-01,Program A,Site 1,LCGMS001,District 1,true,false,false,false,false,true,false,false,false,true,true,true
+Jane,Smith,456 Oak Ave,Brooklyn,NY,11201,7185555678,jane.smith@example.com,counselor@school.edu,987-65-4321,2001-02-15,Program B,Site 2,LCGMS002,District 2,false,true,false,false,false,false,true,false,false,true,true,true 
