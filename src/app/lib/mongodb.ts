@@ -1,15 +1,10 @@
 import { MongoClient } from 'mongodb';
 
 if (!process.env.MONGODB_URI) {
-  throw new Error('Invalid/Missing environment variable: "MONGODB_URI"');
-}
-
-if (!process.env.MONGODB_DB) {
-  throw new Error('Please add your MongoDB database name to .env.local');
+  throw new Error('Please add your Mongo URI to .env.local');
 }
 
 const uri = process.env.MONGODB_URI;
-const dbName = process.env.MONGODB_DB;
 const options = {};
 
 let client;
@@ -23,37 +18,22 @@ if (process.env.NODE_ENV === 'development') {
   };
 
   if (!globalWithMongo._mongoClientPromise) {
-    console.log('Creating new MongoDB client in development mode');
     client = new MongoClient(uri, options);
     globalWithMongo._mongoClientPromise = client.connect();
   }
   clientPromise = globalWithMongo._mongoClientPromise;
 } else {
   // In production mode, it's best to not use a global variable.
-  console.log('Creating new MongoDB client in production mode');
   client = new MongoClient(uri, options);
   clientPromise = client.connect();
 }
 
-// Test the connection
-clientPromise.then(async (client) => {
-  try {
-    const db = client.db('district79');
-    const collections = await db.listCollections().toArray();
-    console.log('Available collections:', collections.map(c => c.name));
-    
-    const applications = db.collection('applications');
-    const count = await applications.countDocuments();
-    console.log('Number of applications in database:', count);
-  } catch (error) {
-    console.error('Error testing MongoDB connection:', error);
-  }
-}).catch(error => {
-  console.error('Error connecting to MongoDB:', error);
-});
-
-export default clientPromise;
-export const getDb = async () => {
+export async function connectToDatabase() {
   const client = await clientPromise;
-  return client.db(dbName);
-}; 
+  const db = client.db(process.env.MONGODB_DB);
+  return { client, db };
+}
+
+// Export a module-scoped MongoClient promise. By doing this in a
+// separate module, the client can be shared across functions.
+export default clientPromise; 

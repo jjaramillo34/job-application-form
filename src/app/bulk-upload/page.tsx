@@ -39,6 +39,7 @@ export default function BulkUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [records, setRecords] = useState<Record[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -102,12 +103,14 @@ export default function BulkUpload() {
 
     setIsUploading(true);
     setError(null);
+    setSuccessMessage(null);
     setUploadProgress(0);
 
     try {
       processCSV(file);
       const totalRecords = records.length;
       let processedRecords = 0;
+      let successfulUploads = 0;
 
       for (const record of records) {
         try {
@@ -124,12 +127,17 @@ export default function BulkUpload() {
           }
 
           processedRecords++;
+          successfulUploads++;
           setUploadProgress((processedRecords / totalRecords) * 100);
         } catch (error) {
           console.error('Error uploading record:', error);
           setError(`Failed to upload record ${processedRecords + 1}`);
           break;
         }
+      }
+
+      if (successfulUploads > 0) {
+        setSuccessMessage(`Successfully uploaded ${successfulUploads} student${successfulUploads === 1 ? '' : 's'}`);
       }
     } catch (error) {
       console.error('Error processing file:', error);
@@ -207,6 +215,17 @@ export default function BulkUpload() {
               <div className="flex">
                 <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
                 <span className="block sm:inline">{error}</span>
+              </div>
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative" role="alert">
+              <div className="flex">
+                <svg className="h-5 w-5 text-green-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="block sm:inline">{successMessage}</span>
               </div>
             </div>
           )}

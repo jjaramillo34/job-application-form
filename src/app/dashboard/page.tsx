@@ -11,6 +11,7 @@ interface Application {
   firstName: string;
   lastName: string;
   email: string;
+  counselor_email: string;
   phone: string;
   program: string;
   site: string;
@@ -30,6 +31,7 @@ interface Application {
   fingerprintQuestionnaire: boolean;
   documentsVerified: boolean;
   attendanceVerified: boolean;
+  fingerprintPaymentPreference: 'yes' | 'no' | 'pending';
   status: 'pending' | 'approved' | 'rejected' | 'accepted';
   submittedAt: string;
 }
@@ -278,108 +280,140 @@ export default function Dashboard() {
           Download All
         </button>
       </div>
+      <div className="flex justify-center w-full">
+        <div className="w-full max-w-10xl overflow-x-auto">
+          <table className="min-w-full bg-white border border-gray-200">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Program</th>
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Site</th>
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">District</th>
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Work Locations</th>
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Verification</th>
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
+                <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {applications.map((app) => {
+                const workPreferences = app.workPreferences || {
+                  bronx: false,
+                  brooklyn: false,
+                  queens: false,
+                  statenIsland: false,
+                  manhattan: false,
+                  morning: false,
+                  afternoon: false,
+                  evening: false,
+                  weekend: false
+                };
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border border-gray-200">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-              <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Program</th>
-              <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Site</th>
-              <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">District</th>
-              <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Work Locations</th>
-              <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Verification</th>
-              <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
-              <th className="px-6 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {applications.map((app) => {
-              const workPreferences = app.workPreferences || {
-                bronx: false,
-                brooklyn: false,
-                queens: false,
-                statenIsland: false,
-                manhattan: false,
-                morning: false,
-                afternoon: false,
-                evening: false,
-                weekend: false
-              };
+                const selectedLocations = Object.entries(workPreferences)
+                  .filter(([key, value]) => ['bronx', 'brooklyn', 'queens', 'statenIsland', 'manhattan'].includes(key) && value)
+                  .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
+                  .join(', ') || 'None selected';
 
-              const selectedLocations = Object.entries(workPreferences)
-                .filter(([key, value]) => ['bronx', 'brooklyn', 'queens', 'statenIsland', 'manhattan'].includes(key) && value)
-                .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
-                .join(', ') || 'None selected';
-
-              return (
-                <tr key={app._id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{app.firstName} {app.lastName}</div>
-                    <div className="text-sm text-gray-500">{app.email}</div>
-                    <div className="text-sm text-gray-500">{app.phone}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{app.program}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{app.site}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{app.geographicDistrict}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{selectedLocations}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <div className="space-y-1">
-                      <div className={`inline-block px-2 py-1 rounded text-xs ${app.fingerprintQuestionnaire ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        Fingerprint
+                return (
+                  <tr key={app._id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{app.firstName} {app.lastName}</div>
+                      <div className="text-sm text-green-500">
+                        <span className="text-xs text-green-500 font-small">{app.email}</span>
                       </div>
-                      <div className={`inline-block px-2 py-1 rounded text-xs ${app.documentsVerified ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        Documents
+                      <div className="text-sm text-gray-500">
+                        <span className="text-xs text-green-500 font-small">{app.counselor_email}</span>
                       </div>
-                      <div className={`inline-block px-2 py-1 rounded text-xs ${app.attendanceVerified ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        Attendance
+                      <div className="text-sm text-gray-500">
+                        <span className="text-xs text-green-500 font-small">{app.phone}</span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      (app.status || 'pending') === 'approved' ? 'bg-green-100 text-green-800' :
-                      (app.status || 'pending') === 'rejected' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {(app.status || 'pending').charAt(0).toUpperCase() + (app.status || 'pending').slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {format(new Date(app.submittedAt), 'MMM d, yyyy')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => router.push(`/dashboard/${app._id}`)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        View
-                      </button>
-                      {app.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => handleStatusChange(app._id, 'approved')}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => handleStatusChange(app._id, 'rejected')}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">{app.program}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">{app.site}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">{app.geographicDistrict}</td>
+                    <td className='px-6 py-4 whitespace-nowrap text-xs text-gray-500'>
+                      <div className="text-xs text-green-500 font-small">{app.workPreferences.bronx ? 'Bronx' : ''}</div>
+                      <div className="text-xs text-green-500 font-small">{app.workPreferences.brooklyn ? 'Brooklyn' : ''}</div>
+                      <div className="text-xs text-green-500 font-small">{app.workPreferences.queens ? 'Queens' : ''}</div>
+                      <div className="text-xs text-green-500 font-small">{app.workPreferences.statenIsland ? 'Staten Island' : ''}</div>
+                      <div className="text-xs text-green-500 font-small">{app.workPreferences.manhattan ? 'Manhattan' : ''}</div>
+                      <div className="text-xs text-green-500 font-small">{app.workPreferences.morning ? 'Morning' : ''}</div>
+                      <div className="text-xs text-green-500 font-small">{app.workPreferences.afternoon ? 'Afternoon' : ''}</div>
+                      <div className="text-xs text-green-500 font-small">{app.workPreferences.evening ? 'Evening' : ''}</div>
+                      <div className="text-xs text-green-500 font-small">{app.workPreferences.weekend ? 'Weekend' : ''}</div>
+                    </td>
+                    
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="flex flex-col space-y-1">
+                        <div className={`inline-block px-2 py-1 rounded text-xs ${app.fingerprintQuestionnaire ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          Fingerprint
+                        </div>
+                        <div className={`inline-block px-2 py-1 rounded text-xs ${app.documentsVerified ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          Documents
+                        </div>
+                        <div className={`inline-block px-2 py-1 rounded text-xs ${app.attendanceVerified ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          Attendance
+                        </div>
+                      </div>
+                    
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        app.fingerprintPaymentPreference === 'yes' ? 'bg-green-100 text-green-800' :
+                        app.fingerprintPaymentPreference === 'no' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {app.fingerprintPaymentPreference === 'yes' ? 'Willing to Pay' :
+                         app.fingerprintPaymentPreference === 'no' ? 'Not Willing' :
+                         'Pending'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        (app.status || 'pending') === 'approved' ? 'bg-green-100 text-green-800' :
+                        (app.status || 'pending') === 'rejected' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {(app.status || 'pending').charAt(0).toUpperCase() + (app.status || 'pending').slice(1)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                      {format(new Date(app.submittedAt), 'MMM d, yyyy')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => router.push(`/dashboard/${app._id}`)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          View
+                        </button>
+                        {app.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleStatusChange(app._id, 'approved')}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleStatusChange(app._id, 'rejected')}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="mt-4 flex justify-between items-center">

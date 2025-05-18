@@ -10,7 +10,13 @@
     "import-coupons": "ts-node --project tsconfig.scripts.json src/app/scripts/import-coupons.ts"
   },
   "dependencies": {
+    "@ag-grid-community/client-side-row-model": "^32.3.5",
+    "@ag-grid-community/react": "^32.3.5",
+    "@heroicons/react": "^2.2.0",
     "@types/papaparse": "^5.3.16",
+    "@types/recharts": "^1.8.29",
+    "ag-charts-community": "^11.3.0",
+    "chart.js": "^4.4.9",
     "csv-parse": "^5.6.0",
     "csv-writer": "^1.6.0",
     "date-fns": "^4.1.0",
@@ -20,8 +26,10 @@
     "next": "15.3.2",
     "papaparse": "^5.5.2",
     "react": "^19.0.0",
+    "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.0.0",
-    "react-dropzone": "^14.3.8"
+    "react-dropzone": "^14.3.8",
+    "recharts": "^2.15.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

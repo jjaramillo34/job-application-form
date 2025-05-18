@@ -34,6 +34,7 @@ interface FormData {
   fingerprintQuestionnaire: boolean;
   documentsVerified: boolean;
   attendanceVerified: boolean;
+  fingerprintPaymentPreference: 'yes' | 'no' | 'pending';
 }
 
 export default function JobApplicationForm() {
@@ -73,6 +74,7 @@ export default function JobApplicationForm() {
     fingerprintQuestionnaire: false,
     documentsVerified: false,
     attendanceVerified: false,
+    fingerprintPaymentPreference: 'pending',
   });
 
   useEffect(() => {
@@ -564,6 +566,32 @@ export default function JobApplicationForm() {
                 />
                 <span>I have reviewed and confirmed the student's regular attendance</span>
               </label>
+            </div>
+
+            {/* Fingerprint Payment Preference */}
+            <div className="mt-8">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Fingerprint Payment</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Would you like to pay for fingerprints?
+                  </label>
+                  <select
+                    name="fingerprintPaymentPreference"
+                    value={formData.fingerprintPaymentPreference}
+                    onChange={handleChange}
+                    required
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                  >
+                    <option value="pending">Select an option</option>
+                    <option value="yes">Yes, I am willing to pay</option>
+                    <option value="no">No, I am not willing to pay</option>
+                  </select>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Please indicate your preference for fingerprint payment. This information will be used to process your application.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
