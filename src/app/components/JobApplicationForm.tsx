@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 
 interface FormData {
   firstName: string;
@@ -37,12 +37,56 @@ interface FormData {
   fingerprintPaymentPreference: 'yes' | 'no' | 'pending';
 }
 
+const ErrorModal = ({ isOpen, onClose, message }: { isOpen: boolean; onClose: () => void; message: string }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+        >
+          <X size={20} />
+        </button>
+        <div className="text-red-600 mb-4">
+          <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Duplicate Application</h3>
+        <p className="text-gray-600 mb-4">
+          An application with this email or SSN already exists. Please contact{' '}
+          <a 
+            href="mailto:jjaramillo7@schools.nyc.gov"
+            className="text-blue-600 hover:text-blue-800 underline"
+          >
+            Javier Jaramillo
+          </a>{' '}
+          if you believe this is an error.
+        </p>
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function JobApplicationForm() {
   const [isClient, setIsClient] = useState(false);
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSSN, setShowSSN] = useState(false);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
 
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -123,8 +167,52 @@ export default function JobApplicationForm() {
     }));
   };
 
+  const checkForDuplicate = async (email: string, ssn: string): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/check-duplicate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, ssn }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to check for duplicates');
+      }
+
+      const data = await response.json();
+      return data.isDuplicate;
+    } catch (err) {
+      console.error('Error checking for duplicates:', err);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Custom validation for work preferences
+    const locationPrefs = [
+      formData.workPreferences.bronx,
+      formData.workPreferences.brooklyn,
+      formData.workPreferences.queens,
+      formData.workPreferences.statenIsland,
+      formData.workPreferences.manhattan
+    ];
+    const timePrefs = [
+      formData.workPreferences.morning,
+      formData.workPreferences.afternoon,
+      formData.workPreferences.evening,
+      formData.workPreferences.weekend
+    ];
+    if (!locationPrefs.some(Boolean)) {
+      setError('Please select at least one work location (Bronx, Brooklyn, Queens, Staten Island, Manhattan)');
+      return;
+    }
+    if (!timePrefs.some(Boolean)) {
+      setError('Please select at least one work time preference (Morning, Afternoon, Evening, Weekend)');
+      return;
+    }
     if (!validateSSN(formData.ssn)) {
       setError('Please enter a valid SSN');
       return;
@@ -133,10 +221,20 @@ export default function JobApplicationForm() {
       setError('Please verify all required checks before submitting');
       return;
     }
+
     setIsSubmitting(true);
     setError(null);
+    setIsCheckingDuplicate(true);
 
     try {
+      // Check for duplicates first
+      const isDuplicate = await checkForDuplicate(formData.email, formData.ssn);
+      
+      if (isDuplicate) {
+        setShowErrorModal(true);
+        return;
+      }
+
       const response = await fetch('/api/submit-application', {
         method: 'POST',
         headers: {
@@ -151,10 +249,12 @@ export default function JobApplicationForm() {
 
       router.push('/success');
     } catch (err) {
-      setError('Failed to submit application. Please try again.');
+      setModalMessage('Failed to submit application. Please try again.');
+      setShowErrorModal(true);
       console.error('Submission error:', err);
     } finally {
       setIsSubmitting(false);
+      setIsCheckingDuplicate(false);
     }
   };
 
@@ -168,6 +268,11 @@ export default function JobApplicationForm() {
 
   return (
     <div className="w-full max-w-4xl mx-auto p-6">
+      <ErrorModal 
+        isOpen={showErrorModal} 
+        onClose={() => setShowErrorModal(false)} 
+        message={modalMessage} 
+      />
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Job Application Form</h1>
       {isClient ? (
         <form onSubmit={handleSubmit} className="w-full max-w-4xl mx-auto space-y-6">
@@ -192,7 +297,7 @@ export default function JobApplicationForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="program" className="block text-sm font-medium text-gray-700 mb-1">
-                  Program *
+                  Program <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -207,7 +312,7 @@ export default function JobApplicationForm() {
 
               <div>
                 <label htmlFor="site" className="block text-sm font-medium text-gray-700 mb-1">
-                  Site *
+                  Site <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -224,7 +329,7 @@ export default function JobApplicationForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="lcgmsCode" className="block text-sm font-medium text-gray-700 mb-1">
-                  LCGMS Code *
+                  LCGMS Code <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -239,7 +344,7 @@ export default function JobApplicationForm() {
 
               <div>
                 <label htmlFor="geographicDistrict" className="block text-sm font-medium text-gray-700 mb-1">
-                  Geographic District *
+                  Geographic District <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -257,7 +362,7 @@ export default function JobApplicationForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                  First Name *
+                  First Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -272,7 +377,7 @@ export default function JobApplicationForm() {
 
               <div>
                 <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                  Last Name *
+                  Last Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -289,7 +394,7 @@ export default function JobApplicationForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-1">
-                  Date of Birth *
+                  Date of Birth <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="date"
@@ -304,7 +409,7 @@ export default function JobApplicationForm() {
 
               <div>
                 <label htmlFor="ssn" className="block text-sm font-medium text-gray-700 mb-1">
-                  Social Security Number *
+                  Social Security Number <span className="text-red-600">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -335,7 +440,7 @@ export default function JobApplicationForm() {
 
             <div>
               <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                Street Address *
+                Street Address <span className="text-red-600">*</span>
               </label>
               <input
                 type="text"
@@ -351,7 +456,7 @@ export default function JobApplicationForm() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-                  City *
+                  City <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -366,7 +471,7 @@ export default function JobApplicationForm() {
 
               <div>
                 <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">
-                  State *
+                  State <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -381,7 +486,7 @@ export default function JobApplicationForm() {
 
               <div>
                 <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700 mb-1">
-                  ZIP Code *
+                  ZIP Code <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -399,7 +504,7 @@ export default function JobApplicationForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone Number *
+                  Phone Number <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="tel"
@@ -415,7 +520,7 @@ export default function JobApplicationForm() {
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address *
+                  Email Address <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="email"
@@ -431,7 +536,7 @@ export default function JobApplicationForm() {
 
             <div>
               <label htmlFor="counselor_email" className="block text-sm font-medium text-gray-700 mb-1">
-                Counselor Email Address *
+                Counselor Email Address <span className="text-red-600">*</span>
               </label>
               <input
                 type="email"
@@ -444,7 +549,7 @@ export default function JobApplicationForm() {
               />
             </div>
 
-            <h2 className="text-xl font-semibold text-gray-900 mt-8">Work Preferences</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mt-8">Work Preferences <span className="text-red-600">*</span></h2>
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <label className="flex items-center space-x-2">
@@ -534,7 +639,7 @@ export default function JobApplicationForm() {
               </div>
             </div>
 
-            <h2 className="text-xl font-semibold text-gray-900 mt-8">Verification Checklist</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mt-8">Verification Checklist <span className="text-red-600">*</span></h2>
             <div className="space-y-4">
               <label className="flex items-center space-x-2">
                 <input
@@ -574,7 +679,7 @@ export default function JobApplicationForm() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Would you like to pay for fingerprints?
+                    Would you like to pay for fingerprints? <span className="text-red-600">*</span>
                   </label>
                   <select
                     name="fingerprintPaymentPreference"
@@ -586,7 +691,7 @@ export default function JobApplicationForm() {
                     <option value="pending">Select an option</option>
                     <option value="yes">Yes, I am willing to pay</option>
                     <option value="no">No, I am not willing to pay</option>
-                  </select>
+                  </select>        
                   <p className="mt-1 text-sm text-gray-500">
                     Please indicate your preference for fingerprint payment. This information will be used to process your application.
                   </p>
@@ -598,12 +703,12 @@ export default function JobApplicationForm() {
           <div className="flex justify-center mt-8">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCheckingDuplicate}
               className={`px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${
-                isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+                (isSubmitting || isCheckingDuplicate) ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Application'}
+              {isCheckingDuplicate ? 'Checking for duplicates...' : isSubmitting ? 'Submitting...' : 'Submit Application'}
             </button>
           </div>
         </form>

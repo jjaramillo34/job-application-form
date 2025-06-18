@@ -162,6 +162,28 @@ export default function CSVUploadForm() {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const records = parse(text, {
+        header: true,
+        skipEmptyLines: true
+      });
+
+      const previewRecords = records.slice(0, 5);
+      setPreviewData(previewRecords);
+      setFile(file);
+      setError(null);
+    } catch (err) {
+      setError('Error processing file. Please make sure it\'s a valid CSV file.');
+      setPreviewData([]);
+      setFile(null);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <div

@@ -51,8 +51,7 @@ interface Application {
   createdAt: string;
 }
 
-export default function ApplicationDetails({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function ApplicationDetails({ params }: { params: { id: string } }) {
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,21 +62,34 @@ export default function ApplicationDetails({ params }: { params: Promise<{ id: s
 
   useEffect(() => {
     fetchApplication();
-  }, [id]);
+  }, [params.id]);
 
   const fetchApplication = async () => {
     try {
-      const response = await fetch(`/api/applications/${id}`);
-      if (!response.ok) throw new Error('Failed to fetch application');
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/applications/${params.id}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Application not found');
+        }
+        throw new Error('Failed to fetch application');
+      }
       const data = await response.json();
       setApplication(data);
 
       // Fetch coupon information
-      const couponResponse = await fetch('/api/coupons');
-      if (couponResponse.ok) {
-        const coupons = await couponResponse.json();
-        const studentCoupon = coupons.find((c: any) => c.assigned_to === id);
-        setCoupon(studentCoupon || null);
+      try {
+        const couponResponse = await fetch('/api/coupons');
+        if (couponResponse.ok) {
+          const coupons = await couponResponse.json();
+          const studentCoupon = coupons.find((c: any) => c.assigned_to === params.id);
+          setCoupon(studentCoupon || null);
+        }
+      } catch (couponErr) {
+        console.error('Error fetching coupon:', couponErr);
+        // Don't throw error for coupon fetch failure
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -92,7 +104,7 @@ export default function ApplicationDetails({ params }: { params: Promise<{ id: s
       setIsUpdating(true);
       setUpdateError(null);
       
-      const response = await fetch(`/api/applications/${id}`, {
+      const response = await fetch(`/api/applications/${params.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -128,24 +140,57 @@ export default function ApplicationDetails({ params }: { params: Promise<{ id: s
     </div>
   );
   
-  if (error) return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-red-50 border-l-4 border-red-400 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
+  if (error) {
+    if (error === 'Application not found') {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center px-4">
+            <h1 className="text-6xl font-bold text-gray-900 mb-4">404</h1>
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Application Not Found</h2>
+            <p className="text-gray-600 mb-8">
+              Sorry, we couldn't find the application you're looking for.
+            </p>
+            <Link 
+              href="/dashboard" 
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Return to Dashboard
+            </Link>
+          </div>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center px-4">
+          <h1 className="text-6xl font-bold text-gray-900 mb-4">Oops!</h1>
+          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Something went wrong</h2>
+          <p className="text-gray-600 mb-8">
+            {error}
+          </p>
+          <div className="space-x-4">
+            <button
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                fetchApplication();
+              }}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Try again
+            </button>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Return to Dashboard
+            </Link>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
   
   if (!application) return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -205,7 +250,7 @@ export default function ApplicationDetails({ params }: { params: Promise<{ id: s
             Application Details
           </h3>
           <Link
-            href={`/edit/${id}`}
+            href={`/edit/${params.id}`}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Edit Application

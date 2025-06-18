@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { format, parseISO, startOfDay, endOfDay, eachDayOfInterval, subDays, subMonths } from 'date-fns';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { format, parseISO, startOfDay, endOfDay, eachDayOfInterval, subDays, getDay, getHours } from 'date-fns';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -15,7 +16,8 @@ import {
   LineElement,
 } from 'chart.js';
 import { Bar, Pie, Line } from 'react-chartjs-2';
-import { AcademicCapIcon, UserGroupIcon, MapPinIcon, ExclamationTriangleIcon } from '@heroicons/react/24/solid';
+import { AcademicCapIcon, UserGroupIcon, MapPinIcon, ExclamationTriangleIcon, ArrowRightIcon, ArrowLeftIcon } from '@heroicons/react/24/solid';
+import Link from 'next/link';
 
 ChartJS.register(
   CategoryScale,
@@ -35,8 +37,10 @@ interface Application {
   lastName: string;
   email: string;
   counselor_email: string;
+  phone: string;
   program: string;
   site: string;
+  lcgmsCode: string;
   geographicDistrict: string;
   workPreferences: {
     bronx: boolean;
@@ -55,6 +59,7 @@ interface Application {
   fingerprintPaymentPreference: 'yes' | 'no' | 'pending';
   status: 'pending' | 'approved' | 'rejected' | 'accepted';
   submittedAt: string;
+  statusUpdatedAt?: string;
 }
 
 const COLORS = {
@@ -530,11 +535,295 @@ export default function Analytics() {
     }],
   };
 
+  // LCGMS Code Distribution (top 10)
+  const lcgmsStats = applications.reduce((acc: { [key: string]: number }, app) => {
+    acc[app.lcgmsCode] = (acc[app.lcgmsCode] || 0) + 1;
+    return acc;
+  }, {});
+  const lcgmsData = Object.entries(lcgmsStats)
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  // LCGMS Code Success Rate (top 10 by volume)
+  const lcgmsSuccessStats = applications.reduce((acc: { [key: string]: { total: number; approved: number } }, app) => {
+    if (!acc[app.lcgmsCode]) acc[app.lcgmsCode] = { total: 0, approved: 0 };
+    acc[app.lcgmsCode].total++;
+    if (app.status === 'approved' || app.status === 'accepted') acc[app.lcgmsCode].approved++;
+    return acc;
+  }, {});
+  const lcgmsSuccessData = Object.entries(lcgmsSuccessStats)
+    .map(([code, stats]) => ({
+      code,
+      successRate: stats.total > 0 ? (stats.approved / stats.total) * 100 : 0,
+      total: stats.total,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+
+  const lcgmsChartData = {
+    labels: lcgmsData.map(d => d.code),
+    datasets: [{
+      label: 'Applications',
+      data: lcgmsData.map(d => d.count),
+      backgroundColor: '#7c3aed',
+    }],
+  };
+
+  const lcgmsSuccessChartData = {
+    labels: lcgmsSuccessData.map(d => d.code),
+    datasets: [{
+      label: 'Success Rate (%)',
+      data: lcgmsSuccessData.map(d => d.successRate),
+      backgroundColor: '#059669',
+    }],
+  };
+
+  const lcgmsBarOptions = {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' as const },
+      title: { display: true, text: 'Applications by LCGMS Code' },
+    },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Applications' } },
+      x: { title: { display: true, text: 'LCGMS Code' } },
+    },
+  };
+
+  const lcgmsSuccessBarOptions = {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' as const },
+      title: { display: true, text: 'Success Rate by LCGMS Code' },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 100,
+        title: { display: true, text: 'Success Rate (%)' },
+        ticks: {
+          callback: function(this: any, value: number | string) {
+            return `${value}%`;
+          }
+        }
+      },
+      x: { title: { display: true, text: 'LCGMS Code' } },
+    },
+  };
+
+  // Quick stats
+  const totalApplications = applications.length;
+  const approvedApplications = applications.filter(app => app.status === 'approved').length;
+  const pendingApplications = applications.filter(app => app.status === 'pending').length;
+  const rejectedApplications = applications.filter(app => app.status === 'rejected').length;
+  const acceptedApplications = applications.filter(app => app.status === 'accepted').length;
+  const verifiedDocuments = applications.filter(app => app.documentsVerified).length;
+  const verifiedAttendance = applications.filter(app => app.attendanceVerified).length;
+  const completedQuestionnaire = applications.filter(app => app.fingerprintQuestionnaire).length;
+  const willingToPay = applications.filter(app => app.fingerprintPaymentPreference === 'yes').length;
+  const notWillingToPay = applications.filter(app => app.fingerprintPaymentPreference === 'no').length;
+  const pendingPayment = applications.filter(app => app.fingerprintPaymentPreference === 'pending').length;
+
+  // Calculate average response time (time between submission and status change)
+  const getAverageResponseTime = () => {
+    const responseTimes = applications
+      .filter(app => app.status !== 'pending')
+      .map(app => {
+        const submissionDate = new Date(app.submittedAt);
+        const statusChangeDate = new Date(app.statusUpdatedAt || app.submittedAt);
+        return (statusChangeDate.getTime() - submissionDate.getTime()) / (1000 * 60 * 60); // in hours
+      });
+    
+    if (responseTimes.length === 0) return 0;
+    return responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
+  };
+
+  // Prepare heatmap data
+  const getHeatmapData = () => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+    
+    const heatmapData = days.map(day => {
+      const dayIndex = days.indexOf(day);
+      return hours.map(hour => {
+        const count = applications.filter(app => {
+          const date = new Date(app.submittedAt);
+          return getDay(date) === dayIndex && getHours(date) === hour;
+        }).length;
+        return {
+          day,
+          hour,
+          count
+        };
+      });
+    });
+
+    return heatmapData;
+  };
+
   if (loading) return <div className="p-8">Loading...</div>;
   if (error) return <div className="p-8 text-red-600">{error}</div>;
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Top Section: Work Location Preferences & Summary Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+        {/* Work Location Preferences Bar Chart */}
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4">Work Location Preferences</h3>
+          <div className="h-80">
+            <Bar options={barOptions} data={workLocationChartData} />
+          </div>
+        </div>
+        {/* Summary Statistics Card */}
+        <div className="bg-white p-6 rounded-lg shadow flex flex-col justify-center">
+          <h3 className="text-lg font-semibold mb-4">Summary Statistics</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="bg-blue-50 p-4 rounded">
+              <h4 className="text-sm font-medium text-blue-800">Total Applications</h4>
+              <p className="text-2xl font-bold text-blue-600">{applications.length}</p>
+            </div>
+            <div className="bg-green-50 p-4 rounded">
+              <h4 className="text-sm font-medium text-green-800">Unique Counselors</h4>
+              <p className="text-2xl font-bold text-green-600">{Object.keys(counselorStats).length}</p>
+            </div>
+            <div className="bg-purple-50 p-4 rounded">
+              <h4 className="text-sm font-medium text-purple-800">Unique Programs</h4>
+              <p className="text-2xl font-bold text-purple-600">{Object.keys(programStats).length}</p>
+            </div>
+            <div className="bg-yellow-50 p-4 rounded">
+              <h4 className="text-sm font-medium text-yellow-800">Unique Districts</h4>
+              <p className="text-2xl font-bold text-yellow-600">{Object.keys(districtStats).length}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Statistics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-gray-500">Status Distribution</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Approved</span>
+              <span className="text-sm font-medium text-green-600">{approvedApplications}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Accepted</span>
+              <span className="text-sm font-medium text-blue-600">{acceptedApplications}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Pending</span>
+              <span className="text-sm font-medium text-yellow-600">{pendingApplications}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Rejected</span>
+              <span className="text-sm font-medium text-red-600">{rejectedApplications}</span>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-gray-500">Verification Status</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Documents Verified</span>
+              <span className="text-sm font-medium text-green-600">{verifiedDocuments}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Attendance Verified</span>
+              <span className="text-sm font-medium text-blue-600">{verifiedAttendance}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Questionnaire Completed</span>
+              <span className="text-sm font-medium text-purple-600">{completedQuestionnaire}</span>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-gray-500">Payment Preferences</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Willing to Pay</span>
+              <span className="text-sm font-medium text-green-600">{willingToPay}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Not Willing</span>
+              <span className="text-sm font-medium text-red-600">{notWillingToPay}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Pending Decision</span>
+              <span className="text-sm font-medium text-yellow-600">{pendingPayment}</span>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-gray-500">Unique Counts</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Counselors</span>
+              <span className="text-sm font-medium text-blue-600">{Object.keys(counselorStats).length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Programs</span>
+              <span className="text-sm font-medium text-purple-600">{Object.keys(programStats).length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Districts</span>
+              <span className="text-sm font-medium text-green-600">{Object.keys(districtStats).length}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Counselors by Submissions (Vertical Heatmap) */}
+      <div className="bg-white p-6 rounded-lg shadow mb-8">
+        <h3 className="text-lg font-semibold mb-4">Top Counselors by Submissions</h3>
+        {/* Color Legend */}
+        <div className="flex items-center mb-4">
+          <span className="text-xs text-gray-500 mr-2">Low</span>
+          <div className="flex-1 h-3 bg-gradient-to-r from-blue-100 via-blue-400 to-blue-900 rounded"></div>
+          <span className="text-xs text-gray-500 ml-2">High</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-[300px] w-full">
+            <thead>
+              <tr>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider p-2">Counselor</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider p-2">Submissions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                // Get top 10 counselors
+                const topCounselors = counselorData.slice(0, 10);
+                // Find min and max for color scaling
+                const counts = topCounselors.map(d => d.submissions);
+                const min = Math.min(...counts);
+                const max = Math.max(...counts);
+                // Helper to get color
+                const getColor = (count: number) => {
+                  if (max === min) return 'bg-blue-400';
+                  // Interpolate between blue-100 and blue-900
+                  const percent = (count - min) / (max - min);
+                  if (percent < 0.2) return 'bg-blue-100';
+                  if (percent < 0.4) return 'bg-blue-300';
+                  if (percent < 0.6) return 'bg-blue-500';
+                  if (percent < 0.8) return 'bg-blue-700';
+                  return 'bg-blue-900 text-white';
+                };
+                return topCounselors.map((d, i) => (
+                  <tr key={d.counselor}>
+                    <td className="p-2 text-sm text-gray-700">{d.counselor}</td>
+                    <td className={`p-2 text-center font-bold rounded ${getColor(d.submissions)}`}>{d.submissions}</td>
+                  </tr>
+                ));
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Key Insights Card */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-10 flex flex-col md:flex-row gap-6 items-center justify-between shadow">
         <div className="flex items-center gap-3">
@@ -571,10 +860,37 @@ export default function Analytics() {
 
       {/* Section: Trends */}
       <h2 className="text-xl font-bold mb-4 mt-8">Trends</h2>
-      <div className="bg-white p-6 rounded-lg shadow mb-10">
-        <h3 className="text-lg font-semibold mb-4">Submission Trends (Last 90 Days)</h3>
-        <div className="h-80">
-          <Line options={lineOptions} data={getTimeSeriesData()} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4">Submission Trends (Last 90 Days)</h3>
+          <div className="h-80">
+            <Line options={lineOptions} data={getTimeSeriesData()} />
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow flex flex-col justify-center">
+          <h3 className="text-lg font-semibold mb-4">Quick Stats</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">Total Applications</span>
+              <span className="text-2xl font-bold text-blue-600">{totalApplications}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">Approved</span>
+              <span className="text-2xl font-bold text-green-600">{approvedApplications}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">Pending</span>
+              <span className="text-2xl font-bold text-yellow-600">{pendingApplications}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">Rejected</span>
+              <span className="text-2xl font-bold text-red-600">{rejectedApplications}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">Accepted</span>
+              <span className="text-2xl font-bold text-purple-600">{acceptedApplications}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -652,6 +968,38 @@ export default function Analytics() {
           </div>
         </div>
       </div>
+
+      {/* Section: LCGMS Code Analysis */}
+      <h2 className="text-xl font-bold mb-4 mt-8">LCGMS Code Analysis</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4">Applications by LCGMS Code (Top 10)</h3>
+          <div className="h-80">
+            <Bar options={lcgmsBarOptions} data={lcgmsChartData} />
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4">Success Rate by LCGMS Code (Top 10 by Volume)</h3>
+          <div className="h-80">
+            <Bar options={lcgmsSuccessBarOptions} data={lcgmsSuccessChartData} />
+          </div>
+        </div>
+      </div>
+      
+      {/* Section: Button back to the dashboard page */}
+    <div className='flex justify-center mt-10'>
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center px-6 py-3 border border-transparent text-base font-semibold rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow"
+      >
+        <ArrowLeftIcon className="h-5 w-5 ml-2" />
+        &nbsp;&nbsp;
+        <span> Back to Dashboard</span>
+        &nbsp;&nbsp;
+        <ArrowRightIcon className="h-5 w-5 ml-2" />
+      </Link>
     </div>
+    </div>
+    
   );
 } 

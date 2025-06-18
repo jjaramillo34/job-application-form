@@ -7,20 +7,18 @@ export async function GET() {
     const db = client.db(process.env.MONGODB_DB);
     const collection = db.collection('applications');
 
-    // Get all documents
     const allDocs = await collection.find({}).toArray();
-    console.log('All documents:', allDocs);
-
-    // Get document count
     const count = await collection.countDocuments();
-    console.log('Total documents:', count);
 
     return NextResponse.json({
+      success: true,
       totalDocuments: count,
       documents: allDocs
     });
   } catch (error) {
-    console.error('Error verifying applications:', error);
-    return new NextResponse('Error verifying applications', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to verify applications' },
+      { status: 500 }
+    );
   }
 } 

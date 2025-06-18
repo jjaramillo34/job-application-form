@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
 import { decryptData } from '@/app/lib/encryption';
+import Link from 'next/link';
 
 interface Application {
   _id: string;
@@ -39,8 +40,7 @@ interface Application {
   fingerprintPaymentPreference: 'yes' | 'no' | 'pending';
 }
 
-export default function EditApplication({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function EditApplication({ params }: { params: { id: string } }) {
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,16 +49,24 @@ export default function EditApplication({ params }: { params: Promise<{ id: stri
 
   useEffect(() => {
     fetchApplication();
-  }, [id]);
+  }, [params.id]);
 
   const fetchApplication = async () => {
     try {
-      const response = await fetch(`/api/applications/${id}`);
-      if (!response.ok) throw new Error('Failed to fetch application');
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/applications/${params.id}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Application not found');
+        }
+        throw new Error('Failed to fetch application');
+      }
       const data = await response.json();
       setApplication(data);
     } catch (err) {
-      setError('Error loading application');
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -70,7 +78,7 @@ export default function EditApplication({ params }: { params: Promise<{ id: stri
 
     setSaving(true);
     try {
-      const response = await fetch(`/api/applications/${id}`, {
+      const response = await fetch(`/api/applications/${params.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -80,7 +88,7 @@ export default function EditApplication({ params }: { params: Promise<{ id: stri
 
       if (!response.ok) throw new Error('Failed to update application');
       
-      router.push(`/dashboard/${id}`);
+      router.push(`/dashboard/${params.id}`);
     } catch (err) {
       setError('Error updating application');
     } finally {
@@ -88,9 +96,67 @@ export default function EditApplication({ params }: { params: Promise<{ id: stri
     }
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
-  if (!application) return <div>Application not found</div>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    if (error === 'Application not found') {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center px-4">
+            <h1 className="text-6xl font-bold text-gray-900 mb-4">404</h1>
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Application Not Found</h2>
+            <p className="text-gray-600 mb-8">
+              Sorry, we couldn't find the application you're looking for.
+            </p>
+            <Link 
+              href="/dashboard" 
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Return to Dashboard
+            </Link>
+          </div>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center px-4">
+          <h1 className="text-6xl font-bold text-gray-900 mb-4">Oops!</h1>
+          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Something went wrong</h2>
+          <p className="text-gray-600 mb-8">
+            {error}
+          </p>
+          <div className="space-x-4">
+            <button
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                fetchApplication();
+              }}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Try again
+            </button>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Return to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!application) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

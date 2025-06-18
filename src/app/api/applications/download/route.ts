@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { decryptData } from '@/app/lib/encryption';
 import { Document, WithId } from 'mongodb';
+import { format } from 'date-fns';
 
 interface Application extends Document {
   // object id
@@ -17,6 +18,10 @@ interface Application extends Document {
   program: string;
   site: string;
   lcgmsCode: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
   geographicDistrict: string;
   workPreferences?: {
     bronx: boolean;
@@ -36,6 +41,7 @@ interface Application extends Document {
   submittedAt: string;
   ssn: string;
   dateOfBirth: string;
+  fingerprintPaymentPreference: string;
   coupon?: {
     _id: string;
     coupon_code: string;
@@ -46,160 +52,111 @@ interface Application extends Document {
 export async function POST(request: Request) {
   try {
     const { password } = await request.json();
-    
-    // Verify password (you can implement your own password verification logic)
-    if (password !== process.env.DOWNLOAD_PASSWORD) {
-      return new NextResponse('Invalid password', { status: 401 });
+    const correctPassword = process.env.DOWNLOAD_PASSWORD;
+
+    if (!password || password !== correctPassword) {
+      return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
     }
 
     const client = await clientPromise;
-    console.log('MongoDB URI:', process.env.MONGODB_URI);
-    console.log('MongoDB DB:', process.env.MONGODB_DB);
-    
     const db = client.db(process.env.MONGODB_DB);
-    
-    // List all collections to verify we're in the right database
     const collections = await db.listCollections().toArray();
-    console.log('Available collections:', collections.map(c => c.name));
-    
-    const collection = db.collection<Application>('applications');
-    
-    // Get total count first
+    const applicationsCollection = collections.find(c => c.name === 'applications');
+
+    if (!applicationsCollection) {
+      return NextResponse.json({ error: 'Applications collection not found' }, { status: 404 });
+    }
+
+    const collection = db.collection('applications');
     const totalCount = await collection.countDocuments();
-    console.log('Total documents in collection:', totalCount);
-
-    // Get all applications
     const applications = await collection.find({}).toArray();
-    console.log('Found applications for download:', applications.length);
 
-    // Get all coupons
-    const coupons = await db.collection('coupons').find({}).toArray();
-    
+    // Fetch all coupons
+    const couponsCollection = db.collection('coupons');
+    const coupons = await couponsCollection.find({}).toArray();
+
     // Create a map of student IDs to their coupons
     const couponMap = new Map(
       coupons.map(coupon => [coupon.assigned_to, coupon])
     );
 
-    if (applications.length === 0) {
-      return new NextResponse('No applications found', { status: 404 });
-    }
+    // Process applications for CSV
+    const processedApplications = applications.map(app => {
+      const workPreferences = app.workPreferences || {};
+      const locations = [
+        workPreferences.bronx ? 'Bronx' : '',
+        workPreferences.brooklyn ? 'Brooklyn' : '',
+        workPreferences.queens ? 'Queens' : '',
+        workPreferences.statenIsland ? 'Staten Island' : '',
+        workPreferences.manhattan ? 'Manhattan' : ''
+      ].filter(Boolean).join(', ');
 
-    // Create a temporary file path
-    const tempFilePath = join(process.cwd(), 'temp', `applications-${Date.now()}.csv`);
+      const times = [
+        workPreferences.morning ? 'Morning' : '',
+        workPreferences.afternoon ? 'Afternoon' : '',
+        workPreferences.evening ? 'Evening' : '',
+        workPreferences.weekend ? 'Weekend' : ''
+      ].filter(Boolean).join(', ');
 
-    // Process and decrypt sensitive data, and add coupon information
-    const processedApplications = applications.map((app: WithId<Application>) => {
-      try {
-        const decryptedSSN = app.ssn ? decryptData(app.ssn) : '';
-        const decryptedDOB = app.dateOfBirth ? decryptData(app.dateOfBirth) : '';
-        const studentCoupon = couponMap.get(app._id.toString());
+      // Decrypt sensitive data
+      const decryptedSSN = app.ssn ? decryptData(app.ssn) : '';
+      const decryptedDOB = app.dateOfBirth ? decryptData(app.dateOfBirth) : '';
 
-        return {
-          ...app,
-          ssn: decryptedSSN,
-          dateOfBirth: decryptedDOB,
-          bronx: app.workPreferences?.bronx || false,
-          brooklyn: app.workPreferences?.brooklyn || false,
-          queens: app.workPreferences?.queens || false,
-          statenIsland: app.workPreferences?.statenIsland || false,
-          manhattan: app.workPreferences?.manhattan || false,
-          morning: app.workPreferences?.morning || false,
-          afternoon: app.workPreferences?.afternoon || false,
-          evening: app.workPreferences?.evening || false,
-          weekend: app.workPreferences?.weekend || false,
-          coupon_code: studentCoupon?.coupon_code || '',
-          coupon_assigned_at: studentCoupon?.assigned_at || ''
-        };
-      } catch (error) {
-        console.error('Error processing application:', app._id, error);
-        return app;
-      }
+      // Get coupon information
+      const studentCoupon = couponMap.get(app._id.toString());
+
+      return {
+        'ID': app._id.toString(),
+        'First Name': app.firstName || '',
+        'Last Name': app.lastName || '',
+        'Email': app.email || '',
+        'Phone': app.phone || '',
+        'Address': app.address || '',
+        'City': app.city || '',
+        'State': app.state || '',
+        'Zip Code': app.zipCode || '',
+        'Program': app.program || '',
+        'Site': app.site || '',
+        'LCGMS Code': app.lcgmsCode || '',
+        'Geographic District': app.geographicDistrict || '',
+        'Work Locations': locations,
+        'Work Times': times,
+        'SSN': decryptedSSN,
+        'Date of Birth': decryptedDOB,
+        'Fingerprint Questionnaire': app.fingerprintQuestionnaire ? 'Yes' : 'No',
+        'Documents Verified': app.documentsVerified ? 'Yes' : 'No',
+        'Attendance Verified': app.attendanceVerified ? 'Yes' : 'No',
+        'Fingerprint Payment': app.fingerprintPaymentPreference || '',
+        'Status': app.status || 'pending',
+        'Submitted At': app.submittedAt ? new Date(app.submittedAt).toLocaleString() : '',
+        'Counselor Email': app.counselor_email || '',
+        'Coupon Code': studentCoupon?.coupon_code || '',
+        'Coupon Assigned At': studentCoupon?.assigned_at ? new Date(studentCoupon.assigned_at).toLocaleString() : ''
+      };
     });
 
-    console.log('Processed applications for CSV:', processedApplications.length);
+    // Convert to CSV
+    const csvContent = [
+      Object.keys(processedApplications[0]).join(','),
+      ...processedApplications.map(app => 
+        Object.values(app).map(value => 
+          typeof value === 'string' && value.includes(',') ? `"${value}"` : value
+        ).join(',')
+      )
+    ].join('\n');
 
-    // Create CSV content manually
-    const headers = [
-      'ID',
-      'First Name',
-      'Last Name',
-      'Email',
-      'Counselor Email',
-      'Phone',
-      'Program',
-      'Site',
-      'LCGMS Code',
-      'Geographic District',
-      'SSN',
-      'Date of Birth',
-      'Bronx',
-      'Brooklyn',
-      'Queens',
-      'Staten Island',
-      'Manhattan',
-      'Morning',
-      'Afternoon',
-      'Evening',
-      'Weekend',
-      'Fingerprint Questionnaire',
-      'Documents Verified',
-      'Attendance Verified',
-      'Status',
-      'Submitted At',
-      'Coupon Code',
-      'Coupon Assigned At'
-    ].join(',');
-
-    const rows = processedApplications.map(app => [
-      app._id,
-      app.firstName,
-      app.lastName,
-      app.email,
-      app.counselor_email,
-      app.phone,
-      app.program,
-      app.site,
-      app.lcgmsCode,
-      app.geographicDistrict,
-      app.ssn,
-      app.dateOfBirth,
-      app.bronx,
-      app.brooklyn,
-      app.queens,
-      app.statenIsland,
-      app.manhattan,
-      app.morning,
-      app.afternoon,
-      app.evening,
-      app.weekend,
-      app.fingerprintQuestionnaire,
-      app.documentsVerified,
-      app.attendanceVerified,
-      app.status,
-      app.submittedAt,
-      app.coupon_code,
-      app.coupon_assigned_at
-    ].map(field => `"${field}"`).join(','));
-
-    const csvContent = [headers, ...rows].join('\n');
-    console.log('CSV content length:', csvContent.length);
-
-    // Write the CSV file
-    writeFileSync(tempFilePath, csvContent, 'utf8');
-    console.log('CSV file written to:', tempFilePath);
-
-    // Read the file
-    const fileBuffer = readFileSync(tempFilePath);
-    console.log('File buffer created, size:', fileBuffer.length);
+    const fileBuffer = Buffer.from(csvContent);
 
     return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="applications-${new Date().toISOString().split('T')[0]}.csv"`
+        'Content-Disposition': `attachment; filename="applications-${format(new Date(), 'yyyy-MM-dd')}.csv"`
       }
     });
   } catch (error) {
-    console.error('Error downloading applications:', error);
-    return new NextResponse('Error downloading applications', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to download applications' },
+      { status: 500 }
+    );
   }
 } 
