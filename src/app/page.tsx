@@ -16,7 +16,7 @@ export default function Home() {
             </h1>
             
             <p className="text-lg md:text-xl text-gray-600 mb-6">
-              The D79 Job Application Form has been closed as of today.
+              The D79 Job Application Form has been closed as of Tuesday, June 24.
             </p>
             
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
