@@ -83,20 +83,6 @@ export async function POST(request: Request) {
     // Process applications for CSV
     const processedApplications = applications.map(app => {
       const workPreferences = app.workPreferences || {};
-      const locations = [
-        workPreferences.bronx ? 'Bronx' : '',
-        workPreferences.brooklyn ? 'Brooklyn' : '',
-        workPreferences.queens ? 'Queens' : '',
-        workPreferences.statenIsland ? 'Staten Island' : '',
-        workPreferences.manhattan ? 'Manhattan' : ''
-      ].filter(Boolean).join(', ');
-
-      const times = [
-        workPreferences.morning ? 'Morning' : '',
-        workPreferences.afternoon ? 'Afternoon' : '',
-        workPreferences.evening ? 'Evening' : '',
-        workPreferences.weekend ? 'Weekend' : ''
-      ].filter(Boolean).join(', ');
 
       // Decrypt sensitive data
       const decryptedSSN = app.ssn ? decryptData(app.ssn) : '';
@@ -110,26 +96,33 @@ export async function POST(request: Request) {
         'First Name': app.firstName || '',
         'Last Name': app.lastName || '',
         'Email': app.email || '',
-        'Phone': app.phone || '',
+        'Counselor Email': app.counselor_email || '',
+        'SSN': decryptedSSN,
+        'Date of Birth': decryptedDOB,
         'Address': app.address || '',
         'City': app.city || '',
         'State': app.state || '',
         'Zip Code': app.zipCode || '',
+        'Phone': app.phone || '',
         'Program': app.program || '',
         'Site': app.site || '',
         'LCGMS Code': app.lcgmsCode || '',
         'Geographic District': app.geographicDistrict || '',
-        'Work Locations': locations,
-        'Work Times': times,
-        'SSN': decryptedSSN,
-        'Date of Birth': decryptedDOB,
+        'Bronx': workPreferences.bronx ? 'true' : 'false',
+        'Brooklyn': workPreferences.brooklyn ? 'true' : 'false',
+        'Queens': workPreferences.queens ? 'true' : 'false',
+        'Staten Island': workPreferences.statenIsland ? 'true' : 'false',
+        'Manhattan': workPreferences.manhattan ? 'true' : 'false',
+        'Morning': workPreferences.morning ? 'true' : 'false',
+        'Afternoon': workPreferences.afternoon ? 'true' : 'false',
+        'Evening': workPreferences.evening ? 'true' : 'false',
+        'Weekend': workPreferences.weekend ? 'true' : 'false',
         'Fingerprint Questionnaire': app.fingerprintQuestionnaire ? 'Yes' : 'No',
         'Documents Verified': app.documentsVerified ? 'Yes' : 'No',
         'Attendance Verified': app.attendanceVerified ? 'Yes' : 'No',
-        'Fingerprint Payment': app.fingerprintPaymentPreference || '',
+        'Fingerprint Payment Preference': app.fingerprintPaymentPreference || 'pending',
         'Status': app.status || 'pending',
         'Submitted At': app.submittedAt ? new Date(app.submittedAt).toLocaleString() : '',
-        'Counselor Email': app.counselor_email || '',
         'Coupon Code': studentCoupon?.coupon_code || '',
         'Coupon Assigned At': studentCoupon?.assigned_at ? new Date(studentCoupon.assigned_at).toLocaleString() : ''
       };
