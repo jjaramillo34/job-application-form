@@ -5,9 +5,14 @@ if (!process.env.MONGODB_URI) {
 }
 
 const uri = process.env.MONGODB_URI;
-const options = {};
+const options = {
+  maxPoolSize: 10, // Maximum number of connections in the pool
+  serverSelectionTimeoutMS: 5000, // Timeout for server selection
+  socketTimeoutMS: 45000, // Timeout for socket operations
+  bufferMaxEntries: 0, // Disable MongoDB driver buffering
+};
 
-let client;
+let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
 
 if (process.env.NODE_ENV === 'development') {
@@ -29,11 +34,28 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 export async function connectToDatabase() {
-  const client = await clientPromise;
-  const db = client.db(process.env.MONGODB_DB);
-  return { client, db };
+  try {
+    const client = await clientPromise;
+    const db = client.db(process.env.MONGODB_DB);
+    return { client, db };
+  } catch (error) {
+    console.error('Failed to connect to MongoDB:', error);
+    throw new Error('Database connection failed');
+  }
 }
 
 // Export a module-scoped MongoClient promise. By doing this in a
 // separate module, the client can be shared across functions.
-export default clientPromise; 
+export default clientPromise;
+
+// Graceful shutdown function (for cleanup if needed)
+export async function closeConnection() {
+  try {
+    if (client) {
+      await client.close();
+      console.log('MongoDB connection closed');
+    }
+  } catch (error) {
+    console.error('Error closing MongoDB connection:', error);
+  }
+} 

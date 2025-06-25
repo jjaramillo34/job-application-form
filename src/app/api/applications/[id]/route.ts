@@ -1,14 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/app/lib/mongodb';
 import { encryptData, decryptData } from '@/app/lib/encryption';
 import { ObjectId } from 'mongodb';
 
 export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params;
+    const { id } = params;
     const { db } = await connectToDatabase();
     const application = await db.collection('applications').findOne({ _id: new ObjectId(id) });
     
@@ -27,6 +27,46 @@ export async function GET(
   } catch (error) {
     console.error('Error fetching application:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+    const { db } = await connectToDatabase();
+    const collection = db.collection('applications');
+
+    // First check if the application exists
+    const application = await collection.findOne({ _id: new ObjectId(id) });
+    
+    if (!application) {
+      return NextResponse.json({ error: 'Application not found' }, { status: 404 });
+    }
+
+    // Delete the application
+    const result = await collection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json({ error: 'Failed to delete application' }, { status: 500 });
+    }
+
+    // Also remove any associated coupon assignments
+    const couponsCollection = db.collection('coupons');
+    await couponsCollection.deleteMany({ assigned_to: id });
+
+    return NextResponse.json({ 
+      message: 'Application deleted successfully',
+      deletedCount: result.deletedCount 
+    });
+  } catch (error) {
+    console.error('Delete application error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete application' },
+      { status: 500 }
+    );
   }
 }
 

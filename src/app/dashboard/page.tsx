@@ -231,6 +231,31 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteApplication = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this application? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/applications/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) throw new Error('Failed to delete application');
+      
+      // Remove from local state
+      setApplications(applications.filter(app => app._id !== id));
+      
+      // Also remove from selected applications if it was selected
+      setSelectedApplications(selectedApplications.filter(appId => appId !== id));
+      
+      showNotification('success', 'Application deleted successfully');
+    } catch (err) {
+      showNotification('error', 'Failed to delete application');
+    }
+  };
+
   const handleUnassignCoupon = async (couponId: string, studentId: string) => {
     try {
       const response = await fetch('/api/coupons', {
@@ -357,6 +382,45 @@ export default function Dashboard() {
       showNotification('success', `Successfully updated ${selectedApplications.length} applications`);
     } catch (err) {
       showNotification('error', 'Failed to update application statuses');
+    }
+  };
+
+  // Add function for bulk delete
+  const handleBulkDelete = async () => {
+    if (selectedApplications.length === 0) {
+      showNotification('error', 'No applications selected');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedApplications.length} application(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // Delete applications one by one (since we don't have a bulk delete endpoint)
+      const deletePromises = selectedApplications.map(id => 
+        fetch(`/api/applications/${id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+
+      const results = await Promise.all(deletePromises);
+      const failedDeletes = results.filter(result => !result.ok);
+
+      if (failedDeletes.length > 0) {
+        showNotification('error', `Failed to delete ${failedDeletes.length} application(s)`);
+      }
+
+      // Remove deleted applications from local state
+      setApplications(applications.filter(app => !selectedApplications.includes(app._id)));
+      
+      // Clear selection
+      setSelectedApplications([]);
+      
+      showNotification('success', `Successfully deleted ${selectedApplications.length - failedDeletes.length} application(s)`);
+    } catch (err) {
+      showNotification('error', 'Failed to delete applications');
     }
   };
 
@@ -490,6 +554,15 @@ export default function Dashboard() {
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       Reject Selected
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleBulkDelete();
+                        setIsBulkActionOpen(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      Delete Selected
                     </button>
                   </div>
                 </div>
@@ -757,6 +830,13 @@ export default function Dashboard() {
                             </button>
                           </>
                         )}
+                        <button
+                          onClick={() => handleDeleteApplication(app._id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete application"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
